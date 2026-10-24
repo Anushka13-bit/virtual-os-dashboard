@@ -84,7 +84,20 @@ source .venv/bin/activate      # macOS / Linux
 pip install -r requirements.txt
 ```
 
-### 4. Start the server
+### 4. Build or Run Frontend (React + Vite)
+
+The frontend is built with **React + Vite**, maintaining the exact dark-mode OS dashboard UI:
+
+```bash
+# Install frontend dependencies (first time)
+cd frontend && npm install
+
+# Build the production React bundle (auto-served by Flask)
+npm run build
+cd ..
+```
+
+### 5. Start the server
 
 ```bash
 python backend/app.py
@@ -92,7 +105,10 @@ python backend/app.py
 
 Open your browser and go to: **[http://127.0.0.1:5000](http://127.0.0.1:5000)**
 
-### 5. Run the test suite
+> **Frontend Development Mode (Optional with HMR):**
+> Run `cd frontend && npm run dev` to start Vite at `http://localhost:5173` with instant hot module reloading (automatically proxies all API requests to Flask on port 5000).
+
+### 6. Run the test suite
 
 ```bash
 pytest -v

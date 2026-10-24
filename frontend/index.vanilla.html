@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Virtual OS Dashboard — OS Simulation & Resource Monitor</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet" />
+</head>
+<body class="dark-theme">
+
+  <!-- APP CONTAINER -->
+  <div class="app-layout">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="title">VIRTUAL OS</span>
+          <span class="subtitle">Simulated Core v1.0</span>
+        </div>
+      </div>
+
+      <nav class="nav-menu">
+        <a href="#dashboard" class="nav-item active" data-tab="dashboard">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+          Dashboard
+        </a>
+        <a href="#processes" class="nav-item" data-tab="processes">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2H2v10h10V2zM22 2h-8v6h8V2zM22 12h-8v10h8V12zM12 16H2v6h10v-6z"></path></svg>
+          Processes
+        </a>
+        <a href="#scheduling" class="nav-item" data-tab="scheduling">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+          Scheduling
+        </a>
+        <a href="#memory" class="nav-item" data-tab="memory">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-3b0 0 1 2-2h12a2 2 0 0 1 2 2v3s0 2-2 2H8a2 2 0 0 1-2-2z"></path><path d="M6 5v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5s0-2-2-2H8a2 2 0 0 0-2 2z"></path><line x1="12" y1="10" x2="12" y2="14"></line></svg>
+          Memory
+        </a>
+        <a href="#paging" class="nav-item" data-tab="paging">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
+          Paging
+        </a>
+        <a href="#deadlocks" class="nav-item" data-tab="deadlocks">
+          <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+          Deadlocks
+        </a>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="system-indicator">
+          <span class="pulse-dot"></span>
+          <span id="sys-status-text">System Active</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="main-content">
+
+      <!-- TOP HEADER -->
+      <header class="top-header">
+        <div class="header-titles">
+          <h1 id="page-title">Virtual OS Dashboard</h1>
+          <p id="page-subtitle">Operating System Simulation & Resource Monitor</p>
+        </div>
+        <div class="header-actions">
+          <div class="status-badge safe" id="header-deadlock-badge">
+            <span class="badge-dot"></span>
+            <span id="header-deadlock-text">SAFE STATE</span>
+          </div>
+          <button class="btn btn-secondary btn-sm" id="btn-refresh-state">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>
+            Sync State
+          </button>
+        </div>
+      </header>
+
+      <div class="content-scroll">
+
+        <!-- ========================================== -->
+        <!-- TAB 1: DASHBOARD HOME                      -->
+        <!-- ========================================== -->
+        <section id="view-dashboard" class="tab-view active">
+          <!-- SUMMARY CARDS -->
+          <div class="cards-grid">
+            <div class="card metric-card">
+              <div class="card-header">
+                <span class="card-title">CPU Usage</span>
+                <div class="card-icon cpu-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect><rect x="9" y="9" width="6" height="6"></rect><line x1="9" y1="1" x2="9" y2="4"></line><line x1="15" y1="1" x2="15" y2="4"></line><line x1="9" y1="20" x2="9" y2="23"></line><line x1="15" y1="20" x2="15" y2="23"></line><line x1="20" y1="9" x2="23" y2="9"></line><line x1="20" y1="15" x2="23" y2="15"></line><line x1="1" y1="9" x2="4" y2="9"></line><line x1="1" y1="15" x2="4" y2="15"></line></svg>
+                </div>
+              </div>
+              <div class="card-value" id="card-cpu-val">0%</div>
+              <div class="progress-bar-container">
+                <div class="progress-bar" id="card-cpu-bar" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="card metric-card">
+              <div class="card-header">
+                <span class="card-title">Memory Usage</span>
+                <div class="card-icon mem-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 19v-3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3s0 2-2 2H8a2 2 0 0 1-2-2z"></path><path d="M6 5v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5s0-2-2-2H8a2 2 0 0 0-2 2z"></path></svg>
+                </div>
+              </div>
+              <div class="card-value" id="card-mem-val">0 / 1024 MB</div>
+              <div class="progress-bar-container">
+                <div class="progress-bar green" id="card-mem-bar" style="width: 0%;"></div>
+              </div>
+            </div>
+
+            <div class="card metric-card">
+              <div class="card-header">
+                <span class="card-title">Active Processes</span>
+                <div class="card-icon proc-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+                </div>
+              </div>
+              <div class="card-value" id="card-proc-val">0</div>
+              <div class="card-subtext" id="card-proc-sub">0 READY, 0 RUNNING</div>
+            </div>
+
+            <div class="card metric-card">
+              <div class="card-header">
+                <span class="card-title">Page Faults</span>
+                <div class="card-icon fault-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </div>
+              </div>
+              <div class="card-value" id="card-fault-val">0</div>
+              <div class="card-subtext" id="card-hit-sub">Awaiting Memory Module</div>
+            </div>
+
+            <div class="card metric-card">
+              <div class="card-header">
+                <span class="card-title">Deadlock Status</span>
+                <div class="card-icon deadlock-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </div>
+              </div>
+              <div class="card-value" id="card-deadlock-val">SAFE</div>
+              <div class="card-subtext" id="card-deadlock-sub">All resources allocated safely</div>
+            </div>
+          </div>
+
+          <!-- CHARTS & OVERVIEW ROW -->
+          <div class="grid-2col gap-lg margin-top-lg">
+            <!-- CPU ACTIVITY CHART CARD -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">CPU Activity Monitor</h3>
+                <span class="badge badge-primary">Real-time</span>
+              </div>
+              <div class="chart-box">
+                <canvas id="cpuChartCanvas" height="180"></canvas>
+              </div>
+            </div>
+
+            <!-- SYSTEM LOG & EVENT PANEL -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">System Event Log</h3>
+                <button class="btn btn-ghost btn-xs" id="btn-clear-log">Clear</button>
+              </div>
+              <div class="event-log-container" id="eventLogBox">
+                <div class="log-entry info"><span class="log-time">00:00:00</span> Simulated OS initialized. Create processes to begin simulation.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ACTIVE PROCESSES TABLE -->
+          <div class="card margin-top-lg">
+            <div class="card-header border-bottom">
+              <h3 class="card-heading">Active Processes Overview</h3>
+              <a href="#processes" class="link-btn" onclick="switchTab('processes')">Manage Processes &rarr;</a>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="dashProcessTable">
+                <thead>
+                  <tr>
+                    <th>PID</th>
+                    <th>Process Name</th>
+                    <th>Arrival Time</th>
+                    <th>Burst Time</th>
+                    <th>Priority</th>
+                    <th>Memory (MB)</th>
+                    <th>State</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 2: PROCESS MANAGEMENT                  -->
+        <!-- ========================================== -->
+        <section id="view-processes" class="tab-view">
+          <div class="card">
+            <div class="card-header border-bottom">
+              <div>
+                <h3 class="card-heading">Process Control Panel</h3>
+                <p class="card-subheading">Add, inspect, or terminate simulated processes in the central OS state.</p>
+              </div>
+              <button class="btn btn-primary" id="btn-open-create-modal">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Create Process
+              </button>
+            </div>
+
+            <div class="table-container">
+              <table class="data-table" id="fullProcessTable">
+                <thead>
+                  <tr>
+                    <th>PID</th>
+                    <th>Process Name</th>
+                    <th>Arrival Time</th>
+                    <th>Burst Time</th>
+                    <th>Priority</th>
+                    <th>Memory Req (MB)</th>
+                    <th>State</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Populated via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 3: CPU SCHEDULING                      -->
+        <!-- ========================================== -->
+        <section id="view-scheduling" class="tab-view">
+          <div class="card">
+            <div class="card-header border-bottom">
+              <div>
+                <h3 class="card-heading">CPU Scheduling Simulation</h3>
+                <p class="card-subheading">Execute Member 1's scheduling dispatcher algorithms on active processes.</p>
+              </div>
+            </div>
+
+            <div class="card-body">
+              <form id="form-scheduling" class="scheduling-controls">
+                <div class="form-group">
+                  <label for="sched-algo-select">Select Scheduling Algorithm</label>
+                  <select id="sched-algo-select" class="form-control">
+                    <option value="FCFS">First-Come, First-Served (FCFS)</option>
+                    <option value="SJF">Shortest Job First (SJF)</option>
+                    <option value="PRIORITY">Priority Scheduling</option>
+                    <option value="RR">Round Robin (RR)</option>
+                  </select>
+                </div>
+
+                <div class="form-group" id="quantum-group" style="display: none;">
+                  <label for="sched-quantum-input">Time Quantum</label>
+                  <input type="number" id="sched-quantum-input" class="form-control" value="2" min="1" max="100" />
+                </div>
+
+                <div class="form-group align-end">
+                  <button type="submit" class="btn btn-primary" id="btn-run-sched">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    RUN SIMULATION
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- SCHEDULING RESULTS CONTAINER -->
+          <div id="scheduling-results" class="margin-top-lg" style="display: none;">
+            <!-- GANTT CHART CARD -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">Gantt Chart Visualization</h3>
+                <span class="badge badge-info" id="sched-algo-badge">FCFS</span>
+              </div>
+              <div class="card-body">
+                <div class="gantt-chart-wrapper" id="ganttChartContainer">
+                  <!-- Rendered dynamically -->
+                </div>
+              </div>
+            </div>
+
+            <!-- METRICS SUMMARY CARDS -->
+            <div class="cards-grid margin-top-lg">
+              <div class="card metric-card">
+                <div class="card-title">Average Waiting Time</div>
+                <div class="card-value color-blue" id="metric-avg-waiting">0.00 ms</div>
+              </div>
+              <div class="card metric-card">
+                <div class="card-title">Average Turnaround Time</div>
+                <div class="card-value color-green" id="metric-avg-turnaround">0.00 ms</div>
+              </div>
+              <div class="card metric-card">
+                <div class="card-title">Average Response Time</div>
+                <div class="card-value color-purple" id="metric-avg-response">0.00 ms</div>
+              </div>
+              <div class="card metric-card">
+                <div class="card-title">CPU Utilization</div>
+                <div class="card-value color-orange" id="metric-cpu-util">0.0%</div>
+              </div>
+            </div>
+
+            <!-- DETAILED METRICS TABLE -->
+            <div class="card margin-top-lg">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">Per-Process Timing Metrics</h3>
+              </div>
+              <div class="table-container">
+                <table class="data-table" id="schedMetricsTable">
+                  <thead>
+                    <tr>
+                      <th>PID</th>
+                      <th>Completion Time</th>
+                      <th>Turnaround Time</th>
+                      <th>Waiting Time</th>
+                      <th>Response Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <!-- Populated via JS -->
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 4: MEMORY MANAGEMENT (MEMBER 2 READY)  -->
+        <!-- ========================================== -->
+        <section id="view-memory" class="tab-view">
+          <div class="card">
+            <div class="card-header border-bottom">
+              <div>
+                <h3 class="card-heading">Physical Memory Management</h3>
+                <p class="card-subheading">Member 2 Dynamic Partition Allocation & Block Coalescing Engine</p>
+              </div>
+              <div style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <label for="mem-strategy-select" style="font-size:12px; font-weight:600; color:var(--text-muted);">Strategy:</label>
+                <select id="mem-strategy-select" class="form-control" style="width: auto; padding: 6px 12px;">
+                  <option value="first_fit">First Fit</option>
+                  <option value="best_fit">Best Fit</option>
+                  <option value="worst_fit">Worst Fit</option>
+                </select>
+                <button class="btn btn-secondary btn-sm" id="btn-reset-memory">Reset Memory</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="cards-grid margin-top-md">
+            <div class="card metric-card">
+              <div class="card-title">Total Memory</div>
+              <div class="card-value" id="mem-total-val">1024 MB</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">Used Memory</div>
+              <div class="card-value color-blue" id="mem-used-val">0 MB</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">Free Memory</div>
+              <div class="card-value color-green" id="mem-free-val">1024 MB</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">Memory Utilization</div>
+              <div class="card-value color-purple" id="mem-util-val">0.0%</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">External Fragmentation</div>
+              <div class="card-value color-orange" id="mem-frag-val">0 MB</div>
+            </div>
+          </div>
+
+          <!-- MEMORY ALLOCATION MAP GRID -->
+          <div class="card margin-top-lg">
+            <div class="card-header border-bottom">
+              <h3 class="card-heading">Physical Memory Allocation Map</h3>
+            </div>
+            <div class="card-body">
+              <div class="memory-map-bar" id="memoryMapBar">
+                <!-- Populated via JS -->
+              </div>
+              <div class="memory-legend margin-top-md" id="memoryLegend">
+                <!-- Legend items -->
+              </div>
+            </div>
+          </div>
+
+          <!-- MEMORY BLOCKS DETAIL TABLE -->
+          <div class="card margin-top-lg">
+            <div class="card-header border-bottom">
+              <h3 class="card-heading">Memory Partition Blocks & Status</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="memoryBlocksTable">
+                <thead>
+                  <tr>
+                    <th>Start Address</th>
+                    <th>End Address</th>
+                    <th>Block Size</th>
+                    <th>Status</th>
+                    <th>Allocated Process</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Rendered via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 5: PAGING (MEMBER 2 INTEGRATED)        -->
+        <!-- ========================================== -->
+        <section id="view-paging" class="tab-view">
+          <div class="card">
+            <div class="card-header border-bottom">
+              <div>
+                <h3 class="card-heading">Virtual Memory & Page Replacement Simulator</h3>
+                <p class="card-subheading">Execute Member 2's FIFO, LRU, and Optimal algorithms on custom page reference strings.</p>
+              </div>
+            </div>
+
+            <div class="card-body">
+              <form id="form-paging" class="scheduling-controls">
+                <div class="form-group" style="flex: 2; min-width: 220px;">
+                  <label for="paging-ref-string">Page Reference String (space/comma separated)</label>
+                  <input type="text" id="paging-ref-string" class="form-control" value="7 0 1 2 0 3 0 4 2 3 0 3 2 1 2 0 1 7 0 1" placeholder="e.g. 7 0 1 2 0 3 0 4" required />
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 120px;">
+                  <label for="paging-frames-input">Page Frames</label>
+                  <input type="number" id="paging-frames-input" class="form-control" value="3" min="1" max="10" required />
+                </div>
+
+                <div class="form-group" style="flex: 1; min-width: 140px;">
+                  <label for="paging-algo-select">Algorithm</label>
+                  <select id="paging-algo-select" class="form-control">
+                    <option value="FIFO">FIFO (First-In, First-Out)</option>
+                    <option value="LRU">LRU (Least Recently Used)</option>
+                    <option value="OPTIMAL">Optimal (Belady's)</option>
+                  </select>
+                </div>
+
+                <div class="form-group align-end" style="display: flex; gap: 10px;">
+                  <button type="submit" class="btn btn-primary" id="btn-run-paging">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                    RUN SIMULATION
+                  </button>
+                  <button type="button" class="btn btn-secondary" id="btn-compare-paging">
+                    COMPARE ALL
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <!-- PAGING METRICS SUMMARY CARDS -->
+          <div class="cards-grid margin-top-lg">
+            <div class="card metric-card">
+              <div class="card-title">Page Frames</div>
+              <div class="card-value" id="paging-frames-val">3</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">Total References</div>
+              <div class="card-value color-blue" id="paging-total-refs-val">0</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">Page Faults</div>
+              <div class="card-value color-red" id="paging-faults-val">0</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">Page Hits</div>
+              <div class="card-value color-green" id="paging-hits-val">0</div>
+            </div>
+            <div class="card metric-card">
+              <div class="card-title">Hit Ratio</div>
+              <div class="card-value color-purple" id="paging-ratio-val">0.0%</div>
+            </div>
+          </div>
+
+          <!-- COMPARISON RESULTS PANEL (IF COMPARE CLICKED) -->
+          <div id="paging-comparison-box" class="card margin-top-lg" style="display: none;">
+            <div class="card-header border-bottom">
+              <h3 class="card-heading">Algorithm Performance Comparison</h3>
+              <span class="badge badge-primary" id="paging-best-algo-badge">Best: Optimal</span>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="pagingComparisonTable">
+                <thead>
+                  <tr>
+                    <th>Algorithm</th>
+                    <th>Total References</th>
+                    <th>Page Faults</th>
+                    <th>Page Hits</th>
+                    <th>Fault Rate (%)</th>
+                    <th>Hit Rate (%)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Rendered via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- CURRENT PAGE FRAMES STATUS -->
+          <div class="card margin-top-lg">
+            <div class="card-header border-bottom">
+              <h3 class="card-heading">Final Page Frames State</h3>
+              <span class="badge badge-info" id="paging-current-algo-badge">FIFO</span>
+            </div>
+            <div class="card-body">
+              <div class="frames-grid" id="pagingFramesGrid">
+                <!-- Rendered via JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- STEP-BY-STEP FRAME HISTORY LOG TABLE -->
+          <div class="card margin-top-lg">
+            <div class="card-header border-bottom">
+              <h3 class="card-heading">Step-by-Step Page Frame History Log</h3>
+            </div>
+            <div class="table-container">
+              <table class="data-table" id="pagingHistoryTable">
+                <thead>
+                  <tr>
+                    <th>Step #</th>
+                    <th>Referenced Page</th>
+                    <th>Frame Contents State</th>
+                    <th>Status</th>
+                    <th>Replaced Page</th>
+                    <th>Reason / Explanation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <!-- Rendered via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========================================== -->
+        <!-- TAB 6: DEADLOCK MANAGEMENT (MEMBER 3)      -->
+        <!-- ========================================== -->
+        <section id="view-deadlocks" class="tab-view">
+          <!-- SECTION 1: SYSTEM STATUS BANNER -->
+          <div class="deadlock-status-banner safe" id="deadlockStatusBanner">
+            <div class="status-banner-icon" id="deadlockBannerIcon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+            </div>
+            <div class="status-banner-content">
+              <h2 id="deadlockBannerTitle">SAFE STATE</h2>
+              <p id="deadlockBannerText">System is currently in a safe state. Banker's Algorithm guarantees deadlock avoidance.</p>
+            </div>
+            <div class="status-banner-actions">
+              <button class="btn btn-light" id="btn-run-safety-check">RUN SAFETY CHECK</button>
+              <button class="btn btn-dark" id="btn-run-detect-deadlock">DETECT DEADLOCK</button>
+            </div>
+          </div>
+
+          <!-- SECTION 2: AVAILABLE RESOURCES CARDS -->
+          <div class="margin-top-lg">
+            <h3 class="section-title">Available Resources</h3>
+            <div class="cards-grid margin-top-sm" id="availableResourcesCards">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
+
+          <!-- SECTION 3, 4, 5: RESOURCE MATRICES -->
+          <div class="grid-3col gap-md margin-top-lg">
+            <!-- ALLOCATION MATRIX -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">Allocation Matrix</h3>
+              </div>
+              <div class="table-container">
+                <table class="matrix-table" id="allocMatrixTable">
+                  <!-- Rendered via JS -->
+                </table>
+              </div>
+            </div>
+
+            <!-- MAXIMUM MATRIX -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">Maximum Matrix</h3>
+              </div>
+              <div class="table-container">
+                <table class="matrix-table" id="maxMatrixTable">
+                  <!-- Rendered via JS -->
+                </table>
+              </div>
+            </div>
+
+            <!-- NEED MATRIX -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">Need Matrix (Max - Alloc)</h3>
+              </div>
+              <div class="table-container">
+                <table class="matrix-table" id="needMatrixTable">
+                  <!-- Rendered via JS -->
+                </table>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 6 & 7: BANKER'S SAFETY & RESOURCE REQUEST -->
+          <div class="grid-2col gap-lg margin-top-lg">
+            <!-- BANKER'S SAFETY RESULT PANEL -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">Banker's Safety Execution Result</h3>
+              </div>
+              <div class="card-body">
+                <div class="safety-result-box" id="safetyResultBox">
+                  <div class="safe-sequence-display">
+                    <span class="label">Safe Sequence:</span>
+                    <div class="sequence-chips" id="safeSeqChips">
+                      <span class="seq-chip">P1</span> &rarr; <span class="seq-chip">P2</span> &rarr; <span class="seq-chip">P3</span> &rarr; <span class="seq-chip">P4</span>
+                    </div>
+                  </div>
+                  <p class="explanation-text margin-top-sm" id="safetyExplanation">Click "RUN SAFETY CHECK" to execute algorithm.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- RESOURCE REQUEST FORM -->
+            <div class="card">
+              <div class="card-header border-bottom">
+                <h3 class="card-heading">Resource Request Simulation</h3>
+              </div>
+              <div class="card-body">
+                <form id="form-resource-request">
+                  <div class="form-group">
+                    <label for="req-pid-select">Target Process</label>
+                    <select id="req-pid-select" class="form-control">
+                      <!-- Rendered via JS -->
+                    </select>
+                  </div>
+
+                  <div class="form-row-4col margin-top-sm" id="resourceInputsContainer">
+                    <!-- Resource inputs generated dynamically -->
+                  </div>
+
+                  <button type="submit" class="btn btn-primary btn-full margin-top-md" id="btn-submit-request">
+                    REQUEST RESOURCES
+                  </button>
+                </form>
+
+                <div id="requestResultBox" class="request-result-alert margin-top-md" style="display: none;">
+                  <!-- Request result alert -->
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION 12: RESOURCE ALLOCATION GRAPH (RAG) -->
+          <div class="card margin-top-lg">
+            <div class="card-header border-bottom">
+              <div>
+                <h3 class="card-heading">Resource Allocation Graph (RAG)</h3>
+                <p class="card-subheading">Interactive visual representation of process nodes, resource nodes, allocation edges, and request edges.</p>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="rag-container" id="ragSvgContainer">
+                <svg id="ragSvg" width="100%" height="320" viewBox="0 0 800 320">
+                  <!-- Dynamically rendered via JS -->
+                </svg>
+              </div>
+              <div class="rag-legend margin-top-sm">
+                <span class="rag-legend-item"><span class="legend-circle proc"></span> Process Node</span>
+                <span class="rag-legend-item"><span class="legend-square res"></span> Resource Node</span>
+                <span class="rag-legend-item"><span class="legend-line alloc"></span> Allocation (Resource &rarr; Process)</span>
+                <span class="rag-legend-item"><span class="legend-line req"></span> Request (Process &rarr; Resource)</span>
+              </div>
+            </div>
+          </div>
+
+        </section>
+
+      </div>
+    </main>
+
+  </div>
+
+  <!-- MODAL: CREATE PROCESS -->
+  <div class="modal-overlay" id="createProcessModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Create New Process</h3>
+        <button class="modal-close" id="btn-close-modal">&times;</button>
+      </div>
+      <form id="form-create-process">
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="input-name">Process Name*</label>
+            <input type="text" id="input-name" class="form-control" placeholder="e.g. Compiler, WebBrowser..." required />
+          </div>
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label for="input-arrival">Arrival Time (ms)*</label>
+              <input type="number" id="input-arrival" class="form-control" value="0" min="0" required />
+            </div>
+            <div class="form-group">
+              <label for="input-burst">Burst Time (ms)*</label>
+              <input type="number" id="input-burst" class="form-control" value="3" min="1" required />
+            </div>
+          </div>
+          <div class="form-row-2col">
+            <div class="form-group">
+              <label for="input-priority">Priority (lower = higher priority)</label>
+              <input type="number" id="input-priority" class="form-control" value="1" min="0" />
+            </div>
+            <div class="form-group">
+              <label for="input-memory">Memory Required (MB)</label>
+              <input type="number" id="input-memory" class="form-control" value="128" min="0" />
+            </div>
+          </div>
+
+          <div class="margin-top-sm" style="border-top: 1px solid var(--border-color); padding-top: 12px;">
+            <label style="font-size: 12px; font-weight: 600; color: var(--text-muted);">Maximum Resource Claims (Banker's Algorithm)</label>
+            <div class="form-row-4col margin-top-sm">
+              <div class="form-group">
+                <label for="input-max-cpu">CPU</label>
+                <input type="number" id="input-max-cpu" class="form-control" value="0" min="0" max="10" />
+              </div>
+              <div class="form-group">
+                <label for="input-max-printer">Printer</label>
+                <input type="number" id="input-max-printer" class="form-control" value="0" min="0" max="5" />
+              </div>
+              <div class="form-group">
+                <label for="input-max-disk">Disk</label>
+                <input type="number" id="input-max-disk" class="form-control" value="0" min="0" max="7" />
+              </div>
+              <div class="form-group">
+                <label for="input-max-network">Network</label>
+                <input type="number" id="input-max-network" class="form-control" value="0" min="0" max="4" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" id="btn-cancel-modal">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create Process</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -153,21 +153,61 @@ class SimulatedOS:
 # Path setup for frontend directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+DIST_DIR = os.path.join(FRONTEND_DIR, "dist")
 
-app = Flask(__name__, static_folder=FRONTEND_DIR, static_url_path="")
+
+def get_static_folder() -> str:
+    """Return build dist directory if built, otherwise fallback to frontend directory."""
+    if os.path.exists(DIST_DIR) and os.path.exists(os.path.join(DIST_DIR, "index.html")):
+        return DIST_DIR
+    return FRONTEND_DIR
+
+
+app = Flask(__name__, static_folder=None)
 os_sim = SimulatedOS()
+
+
+@app.after_request
+def add_cors_headers(response):
+    """Enable CORS for Vite development server."""
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+    response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+    return response
+
+
+@app.before_request
+def handle_preflight():
+    """Handle CORS preflight OPTIONS requests."""
+    if request.method == "OPTIONS":
+        res = app.make_default_options_response()
+        res.headers["Access-Control-Allow-Origin"] = "*"
+        res.headers["Access-Control-Allow-Headers"] = "Content-Type,Authorization"
+        res.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,DELETE,OPTIONS"
+        return res
 
 
 @app.route("/")
 def index():
     """Serve main web dashboard."""
-    return send_from_directory(FRONTEND_DIR, "index.html")
+    folder = get_static_folder()
+    return send_from_directory(folder, "index.html")
+
+
+@app.route("/assets/<path:path>")
+def static_assets(path: str):
+    """Serve built Vite assets."""
+    folder = os.path.join(get_static_folder(), "assets")
+    return send_from_directory(folder, path)
 
 
 @app.route("/<path:path>")
 def static_files(path: str):
-    """Serve frontend static assets (CSS, JS)."""
-    return send_from_directory(FRONTEND_DIR, path)
+    """Serve frontend static assets or fallback to index.html for SPA routing."""
+    folder = get_static_folder()
+    if os.path.exists(os.path.join(folder, path)):
+        return send_from_directory(folder, path)
+    return send_from_directory(folder, "index.html")
 
 
 @app.route("/api/state", methods=["GET"])
