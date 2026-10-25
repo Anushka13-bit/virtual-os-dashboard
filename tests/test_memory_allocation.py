@@ -166,3 +166,95 @@ def test_validation_and_edge_cases():
     assert res["success"] is True
     assert mm.total_memory == 1000
     assert mm.get_free_memory() == 1000
+
+
+def test_user_partition_allocation_and_fragmentation():
+    """
+    Tests textbook partition allocation with user-defined blocks:
+    Blocks: [100, 500, 200, 300, 600]
+    Processes: P1 (212 MB, "Browser"), P2 (417 MB, "Database"), P3 (112 MB, "Terminal"), P4 (426 MB, "Editor")
+    """
+    mm = MemoryManager()
+    mm.set_partitions([100, 500, 200, 300, 600])
+
+    assert mm.is_partitioned is True
+    assert mm.total_memory == 1700
+    assert len(mm.blocks) == 5
+    assert [b.block_name for b in mm.blocks] == ["Block 1", "Block 2", "Block 3", "Block 4", "Block 5"]
+
+    processes = [
+        {"pid": "P1", "name": "Browser", "memory_required": 212},
+        {"pid": "P2", "name": "Database", "memory_required": 417},
+        {"pid": "P3", "name": "Terminal", "memory_required": 112},
+        {"pid": "P4", "name": "Editor", "memory_required": 426},
+    ]
+
+    # 1. First Fit
+    res_ff = mm.allocate_processes(processes, algorithm="first_fit")
+    assert res_ff["success"] is True
+    # In First Fit:
+    # P1 (212) -> Block 2 (500)
+    # P2 (417) -> Block 5 (600)
+    # P3 (112) -> Block 3 (200)
+    # P4 (426) -> Unallocated
+    block_map_ff = {b["block_name"]: b for b in res_ff["blocks"]}
+    assert block_map_ff["Block 2"]["process_id"] == "P1"
+    assert block_map_ff["Block 2"]["process_name"] == "Browser"
+    assert block_map_ff["Block 2"]["internal_fragmentation"] == 500 - 212
+
+    assert block_map_ff["Block 5"]["process_id"] == "P2"
+    assert block_map_ff["Block 5"]["process_name"] == "Database"
+    assert block_map_ff["Block 3"]["process_id"] == "P3"
+    assert block_map_ff["Block 3"]["process_name"] == "Terminal"
+    assert block_map_ff["Block 1"]["is_allocated"] is False
+    assert block_map_ff["Block 4"]["is_allocated"] is False
+
+    # 2. Best Fit
+    res_bf = mm.allocate_processes(processes, algorithm="best_fit")
+    assert res_bf["success"] is True
+    # In Best Fit:
+    # P1 (212) -> Block 4 (300)
+    # P2 (417) -> Block 2 (500)
+    # P3 (112) -> Block 3 (200)
+    # P4 (426) -> Block 5 (600)
+    # All 4 processes fit!
+    block_map_bf = {b["block_name"]: b for b in res_bf["blocks"]}
+    assert block_map_bf["Block 4"]["process_id"] == "P1"
+    assert block_map_bf["Block 2"]["process_id"] == "P2"
+    assert block_map_bf["Block 3"]["process_id"] == "P3"
+    assert block_map_bf["Block 5"]["process_id"] == "P4"
+    assert res_bf["external_fragmentation"] == 0
+
+    # 3. Worst Fit
+    res_wf = mm.allocate_processes(processes, algorithm="worst_fit")
+    assert res_wf["success"] is True
+    block_map_wf = {b["block_name"]: b for b in res_wf["blocks"]}
+    assert block_map_wf["Block 5"]["process_id"] == "P1"  # Picked largest 600MB
+    assert block_map_wf["Block 2"]["process_id"] == "P2"  # Picked 500MB
+    assert block_map_wf["Block 4"]["process_id"] == "P3"  # Picked 300MB
+
+
+def test_accurate_external_fragmentation_calculation():
+    """
+    Test scenario where total free memory >= process required memory,
+    but no single block is large enough -> External Fragmentation.
+    """
+    mm = MemoryManager()
+    # Blocks: 100 MB, 500 MB, 200 MB. Total = 800 MB.
+    mm.set_partitions([100, 500, 200])
+
+    # P1 takes the 500 MB block
+    processes = [
+        {"pid": "P1", "name": "HeavyService", "memory_required": 500},
+        {"pid": "P2", "name": "WebWorker", "memory_required": 250},
+    ]
+    res = mm.allocate_processes(processes, algorithm="first_fit")
+
+    # Block 1 (100 MB) is free, Block 3 (200 MB) is free. Total free = 300 MB.
+    # P2 needs 250 MB. Total free (300 MB) >= 250 MB, but max free block is 200 MB.
+    # Hence External Fragmentation = 300 MB!
+    assert res["external_fragmentation"] == 300
+    assert "External Fragmentation = 300 MB" in res["external_frag_explanation"]
+    assert len(res["unallocated_processes"]) == 1
+    assert res["unallocated_processes"][0]["process_id"] == "P2"
+

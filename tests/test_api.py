@@ -246,3 +246,30 @@ def test_paging_invalid_inputs(client):
     res_unk = client.post("/api/paging/run", json={"reference_string": "1 2 3", "frame_count": 3, "algorithm": "INVALID"})
     assert res_unk.status_code == 400
 
+
+def test_memory_partitions_api(client):
+    # Configure partition blocks via string input
+    res = client.post("/api/memory/partitions", json={"partition_string": "100, 500, 200, 300, 600"})
+    assert res.status_code == 200
+    data = res.get_json()["memory_state"]
+    assert data["total_mb"] == 1700
+    assert len(data["blocks"]) == 5
+    assert data["is_partitioned"] is True
+
+    # Create processes to allocate into partitions
+    client.post("/api/processes", json={"name": "Browser", "burst_time": 4, "memory_required": 212})
+    client.post("/api/processes", json={"name": "Database", "burst_time": 6, "memory_required": 417})
+
+    state_res = client.get("/api/state")
+    assert state_res.status_code == 200
+    mem = state_res.get_json()["memory"]
+    assert mem["is_partitioned"] is True
+    assert len(mem["allocation_log"]) >= 2
+    # Check that block name and process name are present
+    alloc_items = [b for b in mem["blocks"] if b["is_allocated"]]
+    assert len(alloc_items) == 2
+    for b in alloc_items:
+        assert b["block_name"].startswith("Block")
+        assert b["process_name"] in ["Browser", "Database"]
+
+

@@ -234,6 +234,25 @@ export default function App() {
     }
   };
 
+  // Configure Memory Partitions API
+  const handleConfigurePartitions = async (partitionInput) => {
+    try {
+      const res = await fetch('/api/memory/partitions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partition_string: partitionInput }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to configure partitions');
+
+      showToast(data.message || 'Memory partitions configured successfully.', 'success');
+      addLog(`Configured Memory Partitions: ${partitionInput}`, 'info');
+      fetchSystemState();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   // Run Paging Simulation API
   const handleRunPaging = async ({ reference_string, frame_count, algorithm }) => {
     try {
@@ -386,6 +405,7 @@ export default function App() {
               memoryState={systemState?.memory}
               onChangeStrategy={handleChangeMemoryStrategy}
               onResetMemory={handleResetMemory}
+              onConfigurePartitions={handleConfigurePartitions}
             />
           )}
 

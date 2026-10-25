@@ -86,20 +86,31 @@ class SimulatedOS:
         # Synchronize deadlock processes
         self.deadlock_mgr.sync_with_processes([p.pid for p in self.processes])
         
-        # Synchronize MemoryManager with active processes
-        allocated_pids = set(self.memory_mgr.get_allocated_processes().keys())
-        active_pids = {p.pid for p in self.processes}
+        proc_name_map = {p.pid: p.name for p in self.processes}
 
-        # Deallocate orphaned process allocations
-        for orphaned_pid in allocated_pids - active_pids:
-            self.memory_mgr.deallocate(orphaned_pid)
+        if self.memory_mgr.is_partitioned:
+            # Authoritative partition allocation of existing processes
+            self.memory_mgr.allocate_processes(self.processes, self.current_allocation_strategy)
+        else:
+            # Synchronize MemoryManager with active processes (legacy dynamic)
+            allocated_pids = set(self.memory_mgr.get_allocated_processes().keys())
+            active_pids = {p.pid for p in self.processes}
 
-        # Allocate memory for active processes needing memory
-        for p in self.processes:
-            if p.memory_required > 0 and p.pid not in allocated_pids:
-                self.memory_mgr.allocate(p.pid, p.memory_required, self.current_allocation_strategy)
+            # Deallocate orphaned process allocations
+            for orphaned_pid in allocated_pids - active_pids:
+                self.memory_mgr.deallocate(orphaned_pid)
 
-        # Calculate statistics via Member 2's calculate_memory_stats
+            # Allocate memory for active processes needing memory
+            for p in self.processes:
+                if p.memory_required > 0 and p.pid not in allocated_pids:
+                    self.memory_mgr.allocate(p.pid, p.memory_required, self.current_allocation_strategy)
+
+            # Ensure process_name is populated on allocated blocks
+            for block in self.memory_mgr.blocks:
+                if block.is_allocated and block.process_id and not block.process_name:
+                    block.process_name = proc_name_map.get(block.process_id, block.process_id)
+
+        # Calculate statistics via calculate_memory_stats
         mem_stats = calculate_memory_stats(self.memory_mgr)
 
         # Generate dynamic color-coded allocation map
@@ -112,9 +123,20 @@ class SimulatedOS:
         for block in self.memory_mgr.blocks:
             b_dict = block.to_dict()
             if block.is_allocated and block.process_id:
+                pname = block.process_name or proc_name_map.get(block.process_id, block.process_id)
+                b_name = block.block_name or "Block"
                 b_dict["color"] = proc_color_map.get(block.process_id, "#3b82f6")
+                b_dict["label"] = f"{b_name}: {pname} ({block.process_id})"
+                b_dict["sublabel"] = f"{block.allocated_size}/{block.size} MB"
+                b_dict["pid"] = block.process_id
+                b_dict["process_name"] = pname
             else:
-                b_dict["color"] = "#374151"
+                b_name = block.block_name or "Block"
+                b_dict["color"] = "#232936"
+                b_dict["label"] = f"{b_name}: Free ({block.size} MB)"
+                b_dict["sublabel"] = f"0/{block.size} MB"
+                b_dict["pid"] = None
+                b_dict["process_name"] = "Free"
             alloc_map.append(b_dict)
 
         self.memory_state = {
@@ -123,10 +145,15 @@ class SimulatedOS:
             "free_mb": mem_stats["free_memory"],
             "utilization_pct": mem_stats["utilization_percentage"],
             "external_fragmentation": mem_stats["external_fragmentation"],
+            "external_frag_explanation": getattr(self.memory_mgr, "external_frag_explanation", ""),
             "allocation_strategy": self.current_allocation_strategy,
             "allocated_processes": mem_stats["allocated_processes"],
             "blocks": [b.to_dict() for b in self.memory_mgr.blocks],
             "allocation_map": alloc_map,
+            "allocation_log": getattr(self.memory_mgr, "allocation_log", []),
+            "unallocated_processes": getattr(self.memory_mgr, "unallocated_processes", []),
+            "partition_sizes": getattr(self.memory_mgr, "partition_sizes", []),
+            "is_partitioned": getattr(self.memory_mgr, "is_partitioned", False),
             "integrated": True,
             "message": f"Memory managed via {self.current_allocation_strategy.replace('_', ' ').title()}.",
         }
@@ -256,8 +283,8 @@ def create_process():
             state="READY",
         )
         
-        # Verify and allocate memory if memory_required > 0
-        if memory_required > 0:
+        # Verify and allocate memory if memory_required > 0 (in non-partitioned mode)
+        if memory_required > 0 and not os_sim.memory_mgr.is_partitioned:
             alloc_res = os_sim.memory_mgr.allocate(pid, memory_required, os_sim.current_allocation_strategy)
             if not alloc_res["success"]:
                 return jsonify({"error": alloc_res["message"]}), 400
@@ -269,6 +296,8 @@ def create_process():
         os_sim.deadlock_mgr.sync_with_processes(
             [p.pid for p in os_sim.processes], max_demands=max_demands_dict
         )
+
+        os_sim.update_metrics()
         
         return jsonify({
             "message": f"Process '{pid}' created successfully.",
@@ -385,6 +414,46 @@ def run_deadlock_detection():
             "involved_resources": summary["involved_resources"],
             "explanation": summary["explanation"],
             "status": summary["status"],
+        })
+    except ValueError as err:
+        return jsonify({"error": str(err)}), 400
+
+
+@app.route("/api/memory/partitions", methods=["POST"])
+def configure_memory_partitions():
+    """
+    Configure existing physical memory partition block sizes (e.g. [100, 500, 200, 300, 600])
+    and immediately allocate active processes into these blocks.
+    Expected JSON:
+    - { "partition_sizes": [100, 500, 200, 300, 600] }
+    or
+    - { "partition_string": "100, 500, 200, 300, 600" } or "100 500 200 300 600"
+    """
+    data = request.get_json() or {}
+    sizes = []
+
+    if "partition_sizes" in data and isinstance(data["partition_sizes"], list):
+        try:
+            sizes = [int(s) for s in data["partition_sizes"] if int(s) > 0]
+        except (ValueError, TypeError) as err:
+            return jsonify({"error": f"Invalid partition size in list: {str(err)}"}), 400
+    elif "partition_string" in data and isinstance(data["partition_string"], str):
+        raw_str = data["partition_string"].replace(",", " ").replace(";", " ")
+        parts = [p.strip() for p in raw_str.split() if p.strip()]
+        try:
+            sizes = [int(p) for p in parts if int(p) > 0]
+        except ValueError:
+            return jsonify({"error": "Partition block sizes must be positive integers."}), 400
+
+    if not sizes:
+        return jsonify({"error": "Please provide a valid list or string of positive memory block sizes."}), 400
+
+    try:
+        os_sim.memory_mgr.set_partitions(sizes)
+        os_sim.update_metrics()
+        return jsonify({
+            "message": f"Configured {len(sizes)} memory blocks successfully ({sum(sizes)} MB total).",
+            "memory_state": os_sim.memory_state,
         })
     except ValueError as err:
         return jsonify({"error": str(err)}), 400
