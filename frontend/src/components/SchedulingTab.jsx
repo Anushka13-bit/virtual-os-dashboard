@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { getProcessColor } from '../utils';
 
-export default function SchedulingTab({ onRunScheduling, schedulingResult }) {
+export default function SchedulingTab({ onRunScheduling, schedulingResult, onLoadBenchmark }) {
   const [algorithm, setAlgorithm] = useState('FCFS');
   const [quantum, setQuantum] = useState(2);
 
@@ -31,7 +31,7 @@ export default function SchedulingTab({ onRunScheduling, schedulingResult }) {
 
         <div className="card-body">
           <form id="form-scheduling" className="scheduling-controls" onSubmit={handleSubmit}>
-            <div className="form-group">
+            <div className="form-group" style={{ flex: 2, minWidth: '220px' }}>
               <label htmlFor="sched-algo-select">Select Scheduling Algorithm</label>
               <select
                 id="sched-algo-select"
@@ -40,14 +40,16 @@ export default function SchedulingTab({ onRunScheduling, schedulingResult }) {
                 onChange={(e) => setAlgorithm(e.target.value)}
               >
                 <option value="FCFS">First-Come, First-Served (FCFS)</option>
-                <option value="SJF">Shortest Job First (SJF)</option>
-                <option value="PRIORITY">Priority Scheduling</option>
+                <option value="SJF">Shortest Job First (SJF - Non-Preemptive)</option>
+                <option value="SRTF">Shortest Remaining Time First (SRTF - Preemptive SJF)</option>
+                <option value="PRIORITY">Priority Scheduling (Non-Preemptive)</option>
+                <option value="PRIORITY_PREEMPTIVE">Priority Scheduling (Preemptive)</option>
                 <option value="RR">Round Robin (RR)</option>
               </select>
             </div>
 
             {algorithm === 'RR' && (
-              <div className="form-group" id="quantum-group">
+              <div className="form-group" id="quantum-group" style={{ flex: 1, minWidth: '110px' }}>
                 <label htmlFor="sched-quantum-input">Time Quantum</label>
                 <input
                   type="number"
@@ -61,13 +63,24 @@ export default function SchedulingTab({ onRunScheduling, schedulingResult }) {
               </div>
             )}
 
-            <div className="form-group align-end">
+            <div className="form-group align-end" style={{ display: 'flex', gap: '8px' }}>
               <button type="submit" className="btn btn-primary" id="btn-run-sched">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <polygon points="5 3 19 12 5 21 5 3"></polygon>
                 </svg>
                 RUN SIMULATION
               </button>
+              {onLoadBenchmark && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  id="btn-load-benchmark"
+                  onClick={onLoadBenchmark}
+                  title="Loads a varied set of processes with contrasting arrival times and bursts to showcase differences across all algorithms"
+                >
+                  Load Benchmark Workload
+                </button>
+              )}
             </div>
           </form>
         </div>

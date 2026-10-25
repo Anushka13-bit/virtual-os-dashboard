@@ -253,6 +253,50 @@ def test_result_is_json_serializable():
         ]
     )
 
-    for algorithm in ("FCFS", "SJF", "PRIORITY", "RR"):
+    for algorithm in ("FCFS", "SJF", "SRTF", "PRIORITY", "PRIORITY_PREEMPTIVE", "RR"):
         result = schedule(processes, algorithm, quantum=1)
         json.dumps(result)
+
+
+def test_srtf_preemption():
+    # P1 arrives at 0 with burst 8
+    # P2 arrives at 1 with burst 4 -> preempts P1 (4 < 7 remaining)
+    # P3 arrives at 2 with burst 2 -> preempts P2 (2 < 3 remaining)
+    processes = _make_processes(
+        [
+            ("P1", "A", 0, 8, 1),
+            ("P2", "B", 1, 4, 1),
+            ("P3", "C", 2, 2, 1),
+        ]
+    )
+
+    result = schedule(processes, "SRTF")
+
+    assert result["algorithm"] == "SRTF"
+    assert result["gantt"] == [
+        {"pid": "P1", "start": 0, "end": 1, "duration": 1},
+        {"pid": "P2", "start": 1, "end": 2, "duration": 1},
+        {"pid": "P3", "start": 2, "end": 4, "duration": 2},
+        {"pid": "P2", "start": 4, "end": 7, "duration": 3},
+        {"pid": "P1", "start": 7, "end": 14, "duration": 7},
+    ]
+
+
+def test_priority_preemption():
+    # P1 arrives at 0 with burst 6, priority 3
+    # P2 arrives at 2 with burst 2, priority 1 -> preempts P1
+    processes = _make_processes(
+        [
+            ("P1", "A", 0, 6, 3),
+            ("P2", "B", 2, 2, 1),
+        ]
+    )
+
+    result = schedule(processes, "PRIORITY_PREEMPTIVE")
+
+    assert result["algorithm"] == "PRIORITY_PREEMPTIVE"
+    assert result["gantt"] == [
+        {"pid": "P1", "start": 0, "end": 2, "duration": 2},
+        {"pid": "P2", "start": 2, "end": 4, "duration": 2},
+        {"pid": "P1", "start": 4, "end": 8, "duration": 4},
+    ]

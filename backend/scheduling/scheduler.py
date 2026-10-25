@@ -8,7 +8,16 @@ from typing import Any, Callable
 from .metrics import calculate_metrics
 from .models import GanttEntry, Process, _ScheduledProcess
 
-SUPPORTED_ALGORITHMS = frozenset({"FCFS", "SJF", "PRIORITY", "RR", "ROUND_ROBIN"})
+SUPPORTED_ALGORITHMS = frozenset({
+    "FCFS",
+    "SJF",
+    "SRTF",
+    "SJF_PREEMPTIVE",
+    "PRIORITY",
+    "PRIORITY_PREEMPTIVE",
+    "RR",
+    "ROUND_ROBIN",
+})
 
 
 def schedule(
@@ -21,7 +30,7 @@ def schedule(
 
     Args:
         processes: List of Process objects to schedule.
-        algorithm: One of FCFS, SJF, PRIORITY, RR, or ROUND_ROBIN.
+        algorithm: One of FCFS, SJF, SRTF, PRIORITY, PRIORITY_PREEMPTIVE, RR, or ROUND_ROBIN.
         quantum: Time quantum for Round Robin (must be > 0).
 
     Returns:
@@ -45,8 +54,12 @@ def schedule(
         gantt, completion_times, response_times = _schedule_fcfs(scheduled)
     elif algorithm_name == "SJF":
         gantt, completion_times, response_times = _schedule_sjf(scheduled)
+    elif algorithm_name in {"SRTF", "SJF_PREEMPTIVE"}:
+        gantt, completion_times, response_times = _schedule_srtf(scheduled)
     elif algorithm_name == "PRIORITY":
         gantt, completion_times, response_times = _schedule_priority(scheduled)
+    elif algorithm_name in {"PRIORITY_PREEMPTIVE", "PREEMPTIVE_PRIORITY"}:
+        gantt, completion_times, response_times = _schedule_priority_preemptive(scheduled)
     elif algorithm_name == "RR":
         gantt, completion_times, response_times = _schedule_round_robin(
             scheduled, quantum
@@ -201,6 +214,91 @@ def _schedule_priority(
     scheduled: list[_ScheduledProcess],
 ) -> tuple[list[GanttEntry], dict[str, int], dict[str, int]]:
     return _run_non_preemptive(
+        scheduled,
+        lambda item: (
+            item.process.priority,
+            item.process.arrival_time,
+            item.original_index,
+        ),
+    )
+
+
+def _run_preemptive(
+    scheduled: list[_ScheduledProcess],
+    selector: Callable[[_ScheduledProcess], tuple[Any, ...]],
+) -> tuple[list[GanttEntry], dict[str, int], dict[str, int]]:
+    """Shared simulation loop for preemptive algorithms (SRTF and Preemptive Priority)."""
+    gantt: list[GanttEntry] = []
+    completion_times: dict[str, int] = {}
+    response_times: dict[str, int] = {}
+    done: set[str] = set()
+    current_time = 0
+
+    while len(done) < len(scheduled):
+        available = [
+            item
+            for item in scheduled
+            if item.process.pid not in done
+            and item.process.arrival_time <= current_time
+        ]
+
+        if not available:
+            next_arrival = _next_arrival_time(scheduled, done, current_time)
+            if next_arrival is None:
+                break
+            current_time = _add_idle_until(gantt, current_time, next_arrival)
+            continue
+
+        selected = min(available, key=selector)
+        _record_first_response(selected, current_time, response_times)
+
+        pending_arrivals = [
+            item.process.arrival_time
+            for item in scheduled
+            if item.process.pid not in done
+            and item.process.arrival_time > current_time
+        ]
+        next_arrival = min(pending_arrivals) if pending_arrivals else None
+
+        if next_arrival is not None and next_arrival < current_time + selected.remaining_burst:
+            run_time = next_arrival - current_time
+        else:
+            run_time = selected.remaining_burst
+
+        slice_start = current_time
+        slice_end = current_time + run_time
+        _append_gantt(gantt, selected.process.pid, slice_start, slice_end)
+
+        current_time = slice_end
+        selected.remaining_burst -= run_time
+
+        if selected.remaining_burst == 0:
+            selected.completion_time = current_time
+            completion_times[selected.process.pid] = current_time
+            done.add(selected.process.pid)
+
+    return gantt, completion_times, response_times
+
+
+def _schedule_srtf(
+    scheduled: list[_ScheduledProcess],
+) -> tuple[list[GanttEntry], dict[str, int], dict[str, int]]:
+    """Shortest Remaining Time First (Preemptive SJF)."""
+    return _run_preemptive(
+        scheduled,
+        lambda item: (
+            item.remaining_burst,
+            item.process.arrival_time,
+            item.original_index,
+        ),
+    )
+
+
+def _schedule_priority_preemptive(
+    scheduled: list[_ScheduledProcess],
+) -> tuple[list[GanttEntry], dict[str, int], dict[str, int]]:
+    """Preemptive Priority Scheduling."""
+    return _run_preemptive(
         scheduled,
         lambda item: (
             item.process.priority,

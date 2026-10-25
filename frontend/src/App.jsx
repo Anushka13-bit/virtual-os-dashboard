@@ -168,6 +168,38 @@ export default function App() {
     }
   };
 
+  // Load Benchmark Workload with varied arrivals, bursts, and priorities
+  const handleLoadBenchmark = async () => {
+    try {
+      if (systemState?.processes?.length > 0) {
+        for (const p of systemState.processes) {
+          await fetch(`/api/processes/${p.pid}`, { method: 'DELETE' });
+        }
+      }
+
+      const benchmarkProcesses = [
+        { name: 'Alpha', arrival_time: 0, burst_time: 6, priority: 3, memory_required: 128 },
+        { name: 'Beta', arrival_time: 2, burst_time: 2, priority: 1, memory_required: 256 },
+        { name: 'Gamma', arrival_time: 4, burst_time: 8, priority: 4, memory_required: 64 },
+        { name: 'Delta', arrival_time: 5, burst_time: 3, priority: 2, memory_required: 192 },
+      ];
+
+      for (const p of benchmarkProcesses) {
+        await fetch('/api/processes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(p),
+        });
+      }
+
+      showToast('Loaded benchmark workload with distinct arrivals, bursts & priorities!', 'success');
+      addLog('Loaded comparison benchmark: P1(arr 0, burst 6), P2(arr 2, burst 2, prio 1), P3(arr 4, burst 8), P4(arr 5, burst 3, prio 2).', 'info');
+      fetchSystemState();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   // Memory Strategy Change API
   const handleChangeMemoryStrategy = async (strategy) => {
     try {
@@ -345,6 +377,7 @@ export default function App() {
             <SchedulingTab
               onRunScheduling={handleRunScheduling}
               schedulingResult={schedulingResult}
+              onLoadBenchmark={handleLoadBenchmark}
             />
           )}
 
