@@ -7,10 +7,10 @@ export default function CreateProcessModal({ isOpen, onClose, onCreateProcess })
     burst_time: 3,
     priority: 1,
     memory_required: 128,
-    max_cpu: 0,
-    max_printer: 0,
-    max_disk: 0,
-    max_network: 0,
+    max_cpu: 4,
+    max_printer: 2,
+    max_disk: 2,
+    max_network: 1,
   });
 
   if (!isOpen) return null;
@@ -38,17 +38,17 @@ export default function CreateProcessModal({ isOpen, onClose, onCreateProcess })
         Network: formData.max_network,
       },
     });
-    // Reset form
+    // Reset form with standard defaults
     setFormData({
       name: '',
       arrival_time: 0,
       burst_time: 3,
       priority: 1,
       memory_required: 128,
-      max_cpu: 0,
-      max_printer: 0,
-      max_disk: 0,
-      max_network: 0,
+      max_cpu: 4,
+      max_printer: 2,
+      max_disk: 2,
+      max_network: 1,
     });
   };
 

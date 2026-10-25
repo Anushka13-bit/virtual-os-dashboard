@@ -8,6 +8,11 @@ from typing import Any
 class BankersAlgorithm:
     """
     Implements Banker's Safety and Resource Request algorithms.
+
+    Invariants enforced:
+      Need[i][j]      = Maximum[i][j] - Allocation[i][j]
+      Available[j]    = Total[j] - sum_i(Allocation[i][j])
+      0 <= Allocation <= Maximum <= Total
     """
 
     def __init__(
@@ -18,55 +23,42 @@ class BankersAlgorithm:
         allocation: dict[str, dict[str, int]],
         maximum: dict[str, dict[str, int]],
     ) -> None:
-        """
-        Initialize Banker's Algorithm with processes, resources, total resources,
-        allocation matrix, and maximum matrix.
-        """
         self.processes = list(processes)
         self.resources = list(resources)
         self.total_resources = dict(total_resources)
         self.allocation = {p: dict(alloc) for p, alloc in allocation.items()}
         self.maximum = {p: dict(max_res) for p, max_res in maximum.items()}
-        
         self.validate_state()
 
     def validate_state(self) -> None:
         """Validate inputs and matrix consistency."""
         if not isinstance(self.processes, list) or not self.processes:
             raise ValueError("processes list cannot be empty")
-        
         if len(set(self.processes)) != len(self.processes):
             raise ValueError("duplicate process IDs in process list")
-
         if not isinstance(self.resources, list) or not self.resources:
             raise ValueError("resources list cannot be empty")
-            
         if len(set(self.resources)) != len(self.resources):
             raise ValueError("duplicate resource IDs in resource list")
 
-        # Validate total resources
         for r in self.resources:
             if r not in self.total_resources:
                 raise ValueError(f"missing total count for resource: {r}")
             if self.total_resources[r] < 0:
                 raise ValueError(f"total resource quantity cannot be negative for {r}")
 
-        # Check process matrices
         for p in self.processes:
             if p not in self.allocation:
                 raise ValueError(f"missing allocation matrix row for process: {p}")
             if p not in self.maximum:
                 raise ValueError(f"missing maximum matrix row for process: {p}")
-
             for r in self.resources:
                 if r not in self.allocation[p]:
                     raise ValueError(f"missing resource {r} in allocation for process {p}")
                 if r not in self.maximum[p]:
                     raise ValueError(f"missing resource {r} in maximum for process {p}")
-
                 alloc_val = self.allocation[p][r]
                 max_val = self.maximum[p][r]
-
                 if alloc_val < 0:
                     raise ValueError(f"negative allocation for process {p}, resource {r}")
                 if max_val < 0:
@@ -76,38 +68,33 @@ class BankersAlgorithm:
                         f"allocation ({alloc_val}) exceeds maximum ({max_val}) for process {p}, resource {r}"
                     )
 
-        # Validate total allocated vs total capacity
         for r in self.resources:
             sum_alloc = sum(self.allocation[p][r] for p in self.processes)
             if sum_alloc > self.total_resources[r]:
                 raise ValueError(
-                    f"total allocated {r} ({sum_alloc}) exceeds total available capacity ({self.total_resources[r]})"
+                    f"total allocated {r} ({sum_alloc}) exceeds total capacity ({self.total_resources[r]})"
                 )
 
     def calculate_need(self) -> dict[str, dict[str, int]]:
-        """Calculate Need matrix: Need[i][j] = Maximum[i][j] - Allocation[i][j]."""
-        need: dict[str, dict[str, int]] = {}
-        for p in self.processes:
-            need[p] = {}
-            for r in self.resources:
-                need[p][r] = self.maximum[p][r] - self.allocation[p][r]
-        return need
+        """Need[i][j] = Maximum[i][j] - Allocation[i][j]."""
+        return {
+            p: {r: self.maximum[p][r] - self.allocation[p][r] for r in self.resources}
+            for p in self.processes
+        }
 
     def calculate_available(self) -> dict[str, int]:
-        """Calculate currently Available vector: Available[j] = Total[j] - Sum(Allocation[i][j])."""
-        available: dict[str, int] = {}
-        for r in self.resources:
-            allocated_total = sum(self.allocation[p][r] for p in self.processes)
-            available[r] = self.total_resources[r] - allocated_total
-        return available
+        """Available[j] = Total[j] - sum_i(Allocation[i][j])."""
+        return {
+            r: self.total_resources[r] - sum(self.allocation[p][r] for p in self.processes)
+            for r in self.resources
+        }
 
     def check_safety(self) -> dict[str, Any]:
         """
-        Execute Banker's Safety Algorithm.
-        
-        Returns:
-            Structured dictionary with safe (bool), safe_sequence (list),
-            available, allocation, maximum, need, finished_processes, explanation.
+        Execute Banker's Safety Algorithm on the current state.
+
+        Returns a structured dict with:
+          safe, safe_sequence, available, need, allocation, maximum, explanation.
         """
         need = self.calculate_need()
         available = self.calculate_available()
@@ -116,35 +103,28 @@ class BankersAlgorithm:
         safe_sequence: list[str] = []
 
         while len(safe_sequence) < len(self.processes):
-            found_candidate = False
-
+            found = False
             for p in self.processes:
-                if not finish[p]:
-                    # Check if Need[p] <= Work
-                    can_fulfill = all(need[p][r] <= work[r] for r in self.resources)
-                    if can_fulfill:
-                        # Simulate process completion and resource release
-                        for r in self.resources:
-                            work[r] += self.allocation[p][r]
-                        finish[p] = True
-                        safe_sequence.append(p)
-                        found_candidate = True
-                        break
-
-            if not found_candidate:
+                if not finish[p] and all(need[p][r] <= work[r] for r in self.resources):
+                    for r in self.resources:
+                        work[r] += self.allocation[p][r]
+                    finish[p] = True
+                    safe_sequence.append(p)
+                    found = True
+                    break
+            if not found:
                 break
 
         is_safe = len(safe_sequence) == len(self.processes)
-        finished_processes = [p for p, is_done in finish.items() if is_done]
 
         if is_safe:
             seq_str = " -> ".join(safe_sequence)
             explanation = f"System is in a SAFE state. Safe sequence: {seq_str}"
         else:
-            unfinished = [p for p, is_done in finish.items() if not is_done]
+            unfinished = [p for p, done in finish.items() if not done]
             explanation = (
-                f"System is in an UNSAFE state. Processes {unfinished} cannot finish "
-                f"with available resources."
+                f"System is in an UNSAFE state. "
+                f"Processes {unfinished} cannot finish with available resources."
             )
 
         return {
@@ -154,7 +134,7 @@ class BankersAlgorithm:
             "allocation": self.allocation,
             "maximum": self.maximum,
             "need": need,
-            "finished_processes": finished_processes,
+            "finished_processes": [p for p, done in finish.items() if done],
             "explanation": explanation,
         }
 
@@ -163,14 +143,13 @@ class BankersAlgorithm:
     ) -> dict[str, Any]:
         """
         Execute Banker's Resource Request Algorithm.
-        
-        Args:
-            process_id: PID making the request.
-            request: Dict mapping resource names to requested amounts.
-            
-        Returns:
-            Structured dictionary with granted (bool), safe (bool),
-            safe_sequence (list), state matrices, explanation.
+
+        Steps:
+        1. Validate process and request amounts (non-negative, within Need).
+        2. Check Request <= Available. Return denial if insufficient.
+        3. Tentatively allocate.
+        4. Run safety check on tentative state.
+        5. If safe — commit. If unsafe — restore and return current state safety.
         """
         if process_id not in self.processes:
             raise ValueError(f"unknown process ID: {process_id}")
@@ -184,35 +163,46 @@ class BankersAlgorithm:
         need = self.calculate_need()
         available = self.calculate_available()
 
-        # Check Request <= Need
+        # Validate Request <= Need
         for r in self.resources:
             req_amt = request.get(r, 0)
             if req_amt > need[process_id][r]:
                 return {
                     "granted": False,
-                    "reason": f"Request for {r} ({req_amt}) exceeds process {process_id}'s Need ({need[process_id][r]})",
-                    "safe": False,
-                    "explanation": f"Request denied: process {process_id} asked for more than its claimed maximum need.",
+                    "waiting": False,
+                    "denied_reason": "exceeds_need",
+                    "reason": (
+                        f"Request[{r}]={req_amt} exceeds "
+                        f"Need[{r}]={need[process_id][r]} for {process_id}"
+                    ),
+                    "safe": self.check_safety()["safe"],
+                    "explanation": (
+                        f"Request denied: process {process_id} asked for more "
+                        f"than its declared maximum need."
+                    ),
                 }
 
-        # Check Request <= Available
+        # Validate Request <= Available
         for r in self.resources:
             req_amt = request.get(r, 0)
             if req_amt > available[r]:
                 return {
                     "granted": False,
-                    "reason": f"Request for {r} ({req_amt}) exceeds currently Available ({available[r]})",
+                    "waiting": False,
+                    "denied_reason": "insufficient_available",
+                    "reason": (
+                        f"Request[{r}]={req_amt} exceeds "
+                        f"currently Available[{r}]={available[r]}"
+                    ),
                     "safe": False,
-                    "explanation": f"Request denied: insufficient resources currently available.",
+                    "explanation": "Request denied: insufficient resources currently available.",
                 }
 
-        # Tentatively allocate resources
+        # Tentatively allocate
         temp_allocation = {p: dict(alloc) for p, alloc in self.allocation.items()}
         for r in self.resources:
-            req_amt = request.get(r, 0)
-            temp_allocation[process_id][r] += req_amt
+            temp_allocation[process_id][r] += request.get(r, 0)
 
-        # Create temporary Banker instance to check safety
         temp_banker = BankersAlgorithm(
             processes=self.processes,
             resources=self.resources,
@@ -220,14 +210,14 @@ class BankersAlgorithm:
             allocation=temp_allocation,
             maximum=self.maximum,
         )
-
         safety_result = temp_banker.check_safety()
 
         if safety_result["safe"]:
-            # Commit allocation to current state if safe
+            # Commit
             self.allocation = temp_allocation
             return {
                 "granted": True,
+                "waiting": False,
                 "safe": True,
                 "safe_sequence": safety_result["safe_sequence"],
                 "available": temp_banker.calculate_available(),
@@ -237,14 +227,25 @@ class BankersAlgorithm:
                 "explanation": f"Request GRANTED for {process_id}. System remains in a safe state.",
             }
         else:
+            # Unsafe — self is completely unchanged (only temp_banker was modified).
+            # Report the CURRENT (pre-request) system safety for the caller.
+            original_safety = self.check_safety()
             return {
                 "granted": False,
+                "waiting": False,
+                "denied_reason": "unsafe_state",
                 "reason": "Granting request leads to an UNSAFE state",
                 "safe": False,
                 "safe_sequence": [],
-                "available": available,
-                "allocation": self.allocation,
+                "current_state_safe": original_safety["safe"],
+                "current_state_safe_sequence": original_safety["safe_sequence"],
+                "available": available,          # unchanged
+                "allocation": self.allocation,   # unchanged
                 "maximum": self.maximum,
-                "need": need,
-                "explanation": f"Request DENIED for {process_id}: allocating requested resources would result in an unsafe state.",
+                "need": need,                    # unchanged
+                "explanation": (
+                    f"Request DENIED for {process_id}: granting {request} would result in "
+                    f"an UNSAFE state. No resources were allocated. "
+                    f"Current system: {original_safety['explanation']}"
+                ),
             }

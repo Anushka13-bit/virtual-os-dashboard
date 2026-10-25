@@ -377,12 +377,13 @@ def run_safety_check():
 @app.route("/api/deadlock/request", methods=["POST"])
 def process_resource_request():
     """
-    Run Banker's Resource Request Algorithm.
-    Expected JSON: {process_id: "P1", request: {CPU: 1, Printer: 0, ...}}
+    Process a resource request using Banker's Avoidance or Simulation mode.
+    Expected JSON: {process_id: "P1", request: {CPU: 1, ...}, [mode]: "banker"|"simulate"}
     """
     data = request.get_json() or {}
     pid = str(data.get("process_id", "")).strip()
     req_dict = data.get("request", {})
+    mode = str(data.get("mode", "banker")).strip().lower()
 
     if not pid:
         return jsonify({"error": "process_id is required"}), 400
@@ -390,15 +391,39 @@ def process_resource_request():
         return jsonify({"error": "request must be a dictionary of resource quantities"}), 400
 
     try:
-        banker = os_sim.deadlock_mgr.get_banker()
-        req_clean = {r: int(val) for r, val in req_dict.items()}
-        result = banker.request_resources(pid, req_clean)
-        
-        # If granted, persist the allocation change in deadlock manager
-        if result.get("granted"):
-            os_sim.deadlock_mgr.allocation = banker.allocation
-
+        result = os_sim.deadlock_mgr.request_resources(pid, req_dict, mode=mode)
+        os_sim.update_metrics()
         return jsonify(result)
+    except ValueError as err:
+        return jsonify({"error": str(err)}), 400
+
+
+@app.route("/api/deadlock/scenario", methods=["POST"])
+def load_deadlock_scenario():
+    """
+    Load predefined pedagogical deadlock scenario:
+    - "safe": Classic Banker safe state with clear safe sequence.
+    - "unsafe": Resource allocation resulting in an unsafe state.
+    - "deadlock": Circular wait resource contention deadlock.
+    - "reset": Clears allocations and pending requests.
+    """
+    data = request.get_json() or {}
+    scenario = str(data.get("scenario", "safe")).strip().lower()
+
+    try:
+        summary = os_sim.deadlock_mgr.load_scenario(scenario)
+        # Ensure OS processes sync with scenario PIDs
+        existing_pids = {p.pid for p in os_sim.processes}
+        for pid in os_sim.deadlock_mgr.processes:
+            if pid not in existing_pids:
+                os_sim.processes.append(
+                    Process(pid=pid, name=f"Process {pid}", arrival_time=0, burst_time=4, priority=1, memory_required=128)
+                )
+        os_sim.update_metrics()
+        return jsonify({
+            "message": f"Loaded {scenario.upper()} scenario successfully.",
+            "deadlock_state": summary,
+        })
     except ValueError as err:
         return jsonify({"error": str(err)}), 400
 
@@ -414,6 +439,60 @@ def run_deadlock_detection():
             "involved_resources": summary["involved_resources"],
             "explanation": summary["explanation"],
             "status": summary["status"],
+        })
+    except ValueError as err:
+        return jsonify({"error": str(err)}), 400
+
+
+@app.route("/api/deadlock/release", methods=["POST"])
+def release_process_resources():
+    """
+    Release resources held by a process.
+    After release, pending waiting requests from other processes are retried.
+    Expected JSON: {process_id: "P1", [release]: {CPU: 2, ...}}  (omit release to release ALL)
+    """
+    data = request.get_json() or {}
+    pid = str(data.get("process_id", "")).strip()
+    release_dict = data.get("release", None)  # None = release all
+
+    if not pid:
+        return jsonify({"error": "process_id is required"}), 400
+    if release_dict is not None and not isinstance(release_dict, dict):
+        return jsonify({"error": "release must be a dictionary of resource quantities"}), 400
+
+    try:
+        summary = os_sim.deadlock_mgr.release_resources(pid, release_dict)
+        os_sim.update_metrics()
+        return jsonify({
+            "message": f"Resources released for {pid}. Pending requests retried.",
+            "deadlock_state": summary,
+        })
+    except ValueError as err:
+        return jsonify({"error": str(err)}), 400
+
+
+@app.route("/api/deadlock/complete", methods=["POST"])
+def complete_process_and_release():
+    """
+    Mark process as completed: release its resources, exclude from future safety checks,
+    prevent future requests, and retry pending waiting requests.
+    Expected JSON: {process_id: "P1"}
+    """
+    data = request.get_json() or {}
+    pid = str(data.get("process_id", "")).strip()
+
+    if not pid:
+        return jsonify({"error": "process_id is required"}), 400
+
+    try:
+        summary = os_sim.deadlock_mgr.complete_process(pid)
+        for p in os_sim.processes:
+            if p.pid == pid:
+                p.state = "TERMINATED"
+        os_sim.update_metrics()
+        return jsonify({
+            "message": f"Process '{pid}' marked as completed. Resources released.",
+            "deadlock_state": summary,
         })
     except ValueError as err:
         return jsonify({"error": str(err)}), 400

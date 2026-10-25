@@ -363,6 +363,7 @@ function updateDeadlockStatus(deadlock) {
   renderMatrixTable('allocMatrixTable', deadlock.allocation, deadlock.resources);
   renderMatrixTable('maxMatrixTable', deadlock.maximum, deadlock.resources);
   renderMatrixTable('needMatrixTable', deadlock.need, deadlock.resources);
+  if (deadlock.request) renderMatrixTable('reqMatrixTable', deadlock.request, deadlock.resources);
 }
 
 function renderMatrixTable(tableId, matrix, resources) {
@@ -706,11 +707,13 @@ async function handleResourceRequest(e) {
     requestObj[resName] = parseInt(inp.value) || 0;
   });
 
+  const mode = document.querySelector('input[name="deadlock-mode"]:checked')?.value || 'banker';
+
   try {
     const res = await fetch('/api/deadlock/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ process_id: pid, request: requestObj }),
+      body: JSON.stringify({ process_id: pid, request: requestObj, mode }),
     });
 
     const data = await res.json();
@@ -724,6 +727,11 @@ async function handleResourceRequest(e) {
       resultBox.innerHTML = `<strong>✓ REQUEST GRANTED:</strong> ${escapeHtml(data.explanation)}`;
       showToast(`Request granted for ${pid}`, 'success');
       addLogEntry(`Resource Request GRANTED for ${pid}`, 'success');
+    } else if (data.waiting) {
+      resultBox.className = 'request-result-alert warning';
+      resultBox.innerHTML = `<strong>⏳ PROCESS WAITING:</strong> ${escapeHtml(data.explanation)}`;
+      showToast(`Process ${pid} is waiting for resources`, 'warning');
+      addLogEntry(`Resource Request WAITING for ${pid}`, 'warning');
     } else {
       resultBox.className = 'request-result-alert denied';
       resultBox.innerHTML = `<strong>✗ REQUEST DENIED:</strong> ${escapeHtml(data.explanation)}`;

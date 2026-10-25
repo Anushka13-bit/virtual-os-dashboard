@@ -299,29 +299,55 @@ export default function App() {
     }
   };
 
-  // Deadlock Safety Check API
-  const handleRunSafetyCheck = async () => {
+  // Resource Request API — Banker's Algorithm only
+  // After granting/denying, fetchSystemState() re-polls which triggers get_state_summary()
+  // to re-evaluate safety and deadlock detection automatically.
+  const handleResourceRequest = async ({ process_id, request, mode = 'banker' }) => {
     try {
-      const res = await fetch('/api/deadlock/safety', { method: 'POST' });
+      const res = await fetch('/api/deadlock/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id, request, mode }),
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Safety check failed');
+      if (!res.ok) throw new Error(data.error || 'Resource request error');
 
-      setSafetyResult(data);
-      showToast(data.safe ? 'System is in a SAFE state.' : 'System is UNSAFE!', data.safe ? 'success' : 'error');
-      addLog(`Banker's Safety Check: ${data.explanation}`, data.safe ? 'success' : 'warning');
+      setRequestResult(data);
+      if (data.granted) {
+        showToast(data.explanation || `Request granted for ${process_id}`, 'success');
+        addLog(`Resource Request GRANTED for ${process_id}`, 'success');
+      } else if (data.waiting) {
+        showToast(data.explanation || `Process ${process_id} waiting for resources`, 'warning');
+        addLog(`Process ${process_id} BLOCKED — pending request logged.`, 'warning');
+      } else {
+        showToast(data.explanation || `Request denied for ${process_id}`, 'error');
+        addLog(`Resource Request DENIED for ${process_id}`, 'error');
+      }
       fetchSystemState();
     } catch (err) {
       showToast(err.message, 'error');
     }
   };
 
-  // Deadlock Detection API
+  const handleRunSafetyCheck = async () => {
+    try {
+      const res = await fetch('/api/deadlock/safety', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Safety check failed');
+      setSafetyResult(data);
+      showToast(data.explanation, data.safe ? 'success' : 'error');
+      addLog(`Safety Check: ${data.explanation}`, data.safe ? 'success' : 'warning');
+      fetchSystemState();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
   const handleRunDeadlockDetection = async () => {
     try {
       const res = await fetch('/api/deadlock/detect', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Deadlock detection failed');
-
       showToast(data.explanation, data.deadlock_detected ? 'error' : 'success');
       addLog(`Deadlock Detector: ${data.explanation}`, data.deadlock_detected ? 'error' : 'info');
       fetchSystemState();
@@ -330,25 +356,53 @@ export default function App() {
     }
   };
 
-  // Resource Request API
-  const handleResourceRequest = async ({ process_id, request }) => {
+  const handleLoadDeadlockScenario = async (scenario) => {
     try {
-      const res = await fetch('/api/deadlock/request', {
+      const res = await fetch('/api/deadlock/scenario', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ process_id, request }),
+        body: JSON.stringify({ scenario }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Resource request error');
+      if (!res.ok) throw new Error(data.error || 'Failed to load scenario');
+      setSafetyResult(null);
+      setRequestResult(null);
+      showToast(data.message, 'success');
+      addLog(`Loaded scenario: ${scenario.toUpperCase()}`, 'info');
+      fetchSystemState();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
 
-      setRequestResult(data);
-      if (data.granted) {
-        showToast(`Request granted for ${process_id}`, 'success');
-        addLog(`Resource Request GRANTED for ${process_id}`, 'success');
-      } else {
-        showToast(`Request denied for ${process_id}`, 'error');
-        addLog(`Resource Request DENIED for ${process_id}`, 'error');
-      }
+  const handleReleaseResources = async ({ process_id, release }) => {
+    try {
+      const res = await fetch('/api/deadlock/release', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id, release }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to release resources');
+      showToast(data.message, 'success');
+      addLog(`Resources released for ${process_id}`, 'info');
+      fetchSystemState();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  };
+
+  const handleCompleteProcess = async (process_id) => {
+    try {
+      const res = await fetch('/api/deadlock/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ process_id }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to complete process');
+      showToast(data.message, 'success');
+      addLog(`Process ${process_id} completed.`, 'success');
       fetchSystemState();
     } catch (err) {
       showToast(err.message, 'error');
@@ -421,9 +475,12 @@ export default function App() {
           {currentTab === 'deadlocks' && (
             <DeadlocksTab
               deadlockState={systemState?.deadlock}
+              onRequestResources={handleResourceRequest}
               onRunSafetyCheck={handleRunSafetyCheck}
               onRunDeadlockDetection={handleRunDeadlockDetection}
-              onRequestResources={handleResourceRequest}
+              onLoadScenario={handleLoadDeadlockScenario}
+              onReleaseResources={handleReleaseResources}
+              onCompleteProcess={handleCompleteProcess}
               safetyResult={safetyResult}
               requestResult={requestResult}
             />

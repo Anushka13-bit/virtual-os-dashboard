@@ -158,6 +158,21 @@ def test_banker_and_deadlock_on_user_processes(client):
     assert res_det.status_code == 200
     assert res_det.get_json()["deadlock_detected"] is False
 
+    # Release endpoint
+    res_rel = client.post("/api/deadlock/release", json={"process_id": "P1", "release": {"CPU": 1}})
+    assert res_rel.status_code == 200
+    assert res_rel.get_json()["deadlock_state"]["allocation"]["P1"]["CPU"] == 0
+
+    # Complete process endpoint
+    res_comp = client.post("/api/deadlock/complete", json={"process_id": "P1"})
+    assert res_comp.status_code == 200
+    assert "completed" in res_comp.get_json()["message"]
+
+    # Scenario endpoint
+    res_scen = client.post("/api/deadlock/scenario", json={"scenario": "deadlock"})
+    assert res_scen.status_code == 200
+    assert res_scen.get_json()["deadlock_state"]["deadlock_detected"] is True
+
 
 def test_memory_allocation_and_strategy_endpoints(client):
     # Test strategy change endpoint
